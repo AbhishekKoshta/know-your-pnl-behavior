@@ -31,7 +31,8 @@ else:
     st.session_state.daily_visits = st.session_state.get('daily_visits', 0) + 1
 
 # 🎪 Main header
-st.title("💰📈 Trading PnL Funhouse 🎢📉")
+st.title("🎯💰📈 Trading PnL Funhouse 🎢📉")
+st.caption("Analyze your trades for patterns, discipline, and performance 🧠💼")
 
 # 👥 Visitor stats
 col1, col2, col3 = st.columns(3)
