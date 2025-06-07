@@ -1,0 +1,3 @@
+symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time,expiry_date
+FINNIFTY2440221300PE,,2024-04-01,NSE,FO,,buy,false,40.000000,132.000000,774908506,1900000025418264,2024-04-01T10:00:56,2024-04-02
+FINNIFTY2440221300PE,,2024-04-01,NSE,FO,,buy,false,40.000000,129.100000,774919374,1900000026180176,2024-04-01T10:02:30,2024-04-02
