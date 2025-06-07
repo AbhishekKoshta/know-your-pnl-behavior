@@ -176,6 +176,47 @@ if uploaded_file is not None:
                     st.metric("⭐ Best Day", best_day)
                     st.metric("💔 Worst Day", worst_day)
                     st.dataframe(dow_pnl[['buy', 'sell', 'dow_pnl']].style.format("{:.2f}"))
+
+                # Add this after the day-wise analysis section (around line 200 in previous code)
+
+                # =========================================
+                # 🔴 Mangal Dosh Warning (Dynamic Alert)
+                # =========================================
+                if 'Mangalvaar' in dow_pnl.index and dow_pnl.loc['Mangalvaar', 'pnl'] < 0:
+                    loss_percent = abs(dow_pnl.loc['Mangalvaar', 'pnl']) / dow_pnl['pnl'].abs().sum() * 100
+                    
+                    st.warning(f"""
+                    🔴 **Mangal Ka Prabhav!**  
+                    Aapke {selected_index} trades mein:  
+                    - Mangalvaar (Tuesday) ko sabse zyada nuksaan hua: **₹{abs(dow_pnl.loc['Mangalvaar', 'pnl']):,.0f}**  
+                    - Ye aapke kul nuksaan ka **{loss_percent:.0f}%** hai  
+
+                    💡 *Panditji ka sujhav:*  
+                    "Mangalvaar ko trade avoid karein, ya stop-loss zaroor lagayein!"  
+                    """, icon="⚠️")
+                    
+                    # Add astrological GIF
+                    st.image("https://i.gifer.com/7IAj.gif", width=200, 
+                             caption="Mangal grah aapke trades ko prabhavit kar raha hai")
+
+                # =========================================
+                # 🪐 Grah Anusaar Trading Tips (Planetary Advice)
+                # =========================================
+                st.subheader("🪐 Grah Anusaar Trading Tips")
+
+                planetary_advice = {
+                    "Somvaar": "Shani ka prabhav - Patience rakhein, long-term trades prefer karein",
+                    "Mangalvaar": "Mangal grah aggressive - Stop-loss na bhulein!",
+                    "Budhvaar": "Budh favorable - Intraday trades ke liye best din",
+                    "Guruvaar": "Guru ka ashirwad - New strategies try karne ka shubh samay",
+                    "Shukravaar": "Shukra positive - Option buying ke liye achha din"
+                }
+
+                selected_day = st.selectbox("Din chunein:", list(planetary_advice.keys()))
+                st.info(f"""
+                {selected_day} ka sujhav:  
+                ✨ *"{planetary_advice[selected_day]}"*  
+                """)
             
             # Hourly analysis
             st.markdown("#### 🕒 Hour of Day Analysis")
