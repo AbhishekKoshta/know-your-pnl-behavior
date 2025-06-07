@@ -31,8 +31,7 @@ else:
     st.session_state.daily_visits = st.session_state.get('daily_visits', 0) + 1
 
 # 🎪 Main header
-st.title("🎯💰📈 Trading PnL Funhouse 🎢📉")
-st.caption("Analyze your trades for patterns, discipline, and performance 🧠💼")
+st.title("💰📈 Trading PnL Funhouse 🎢📉")
 
 # 👥 Visitor stats
 col1, col2, col3 = st.columns(3)
@@ -55,7 +54,7 @@ def check_badges(symbol_count, pnl_value):
     return new_badges
 
 # 📂 File upload
-st.header("📤 Upload Your Trading Data")
+st.header("📤 Step 1: Upload Your Trading Data")
 uploaded_file = st.file_uploader("Drag & drop your trading CSV file here 👇", type=["csv"])
 
 if uploaded_file is not None:
@@ -67,7 +66,7 @@ if uploaded_file is not None:
             st.dataframe(df.head())
         
         # 🛠 Data processing
-        # st.header("🧹 Step 2: Clean & Prepare Data")
+        st.header("🧹 Step 2: Clean & Prepare Data")
         
         # Check required columns
         required_columns = ['symbol', 'order_execution_time', 'trade_type', 'quantity', 'price']
@@ -84,12 +83,15 @@ if uploaded_file is not None:
             
             # Calculate values
             df['trade_value'] = df['quantity'] * df['price']
-            df['trade_day'] = df['order_execution_time'].dt.day_name()
             df['trade_hour'] = df['order_execution_time'].dt.hour
             df['trade_date_only'] = df['order_execution_time'].dt.date
             
-            # 🎯 Symbol (index) selection
-            st.header("🎯 Pick Your Symbol")
+            # Create proper day of week columns (this fixes the error)
+            df['trade_weekday'] = df['order_execution_time'].dt.dayofweek  # Monday=0, Sunday=6
+            df['trade_day_name'] = df['order_execution_time'].dt.day_name()  # Full day name
+            
+            # 🎯 Index selection section
+            st.header("🎯 Step 3: Pick Your Index")
             all_indices = df['index_name'].unique()
             selected_index = st.selectbox(
                 "Which index do you want to analyze?",
@@ -135,51 +137,69 @@ if uploaded_file is not None:
                 'total_value': '{:.2f}'
             }))
             
-            # 📊 Visualizations
-            col1, col2 = st.columns(2)
+            # =============================================
+            # 🕒 TIME-BASED ANALYSIS (Index Specific)
+            # =============================================
+            st.subheader("⏰ Time-Based Performance")
             
-            with col1:
-                st.subheader("📅 Daily Performance")
-                daily_pnl = index_df.groupby(['trade_date_only', 'trade_type'])['trade_value'].sum().unstack()
-                if 'buy' in daily_pnl.columns and 'sell' in daily_pnl.columns:
-                    daily_pnl['daily_pnl'] = daily_pnl['sell'] - daily_pnl['buy']
-                    fig = px.line(daily_pnl, x=daily_pnl.index, y='daily_pnl', 
-                                title=f"Daily PnL for {selected_index}",
-                                markers=True)
+            # Day of week analysis - FIXED IMPLEMENTATION
+            st.markdown("#### 📅 Day of Week Analysis")
+            
+            # Group by weekday number and day name together
+            dow_pnl = index_df.groupby(['trade_weekday', 'trade_day_name', 'trade_type'])['trade_value'].sum().unstack()
+            
+            if 'buy' in dow_pnl.columns and 'sell' in dow_pnl.columns:
+                dow_pnl['dow_pnl'] = dow_pnl['sell'] - dow_pnl['buy']
+                
+                # Sort by weekday number (Monday=0 to Sunday=6)
+                dow_pnl = dow_pnl.sort_index(level='trade_weekday')
+                
+                # Get day names in correct order for display
+                day_names = dow_pnl.index.get_level_values('trade_day_name').unique()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.bar(dow_pnl.reset_index(), 
+                                x='trade_day_name', 
+                                y='dow_pnl',
+                                title=f"PnL by Day of Week",
+                                color='dow_pnl',
+                                color_continuous_scale='RdYlGn',
+                                category_orders={"trade_day_name": list(day_names)})
                     st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                st.subheader("🕒 Hourly Performance (Execution Time)")
-                hour_pnl = index_df.groupby(['trade_hour', 'trade_type'])['trade_value'].sum().unstack()
-                if 'buy' in hour_pnl.columns and 'sell' in hour_pnl.columns:
-                    hour_pnl['hour_pnl'] = hour_pnl['sell'] - hour_pnl['buy']
-                    fig = px.bar(hour_pnl, x=hour_pnl.index, y='hour_pnl', 
-                               title=f"Hourly PnL by Execution Time",
-                               color='hour_pnl',
-                               color_continuous_scale='RdYlGn',
-                               labels={'trade_hour': 'Hour of Execution'})
-                    st.plotly_chart(fig, use_container_width=True)
-            
-            # 🧠 Behavioral insights
-            st.subheader("🧠 Trading Psychology Insights")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📅 Best Day to Trade")
-                dow_pnl = index_df.groupby(['trade_day', 'trade_type'])['trade_value'].sum().unstack()
-                if 'buy' in dow_pnl.columns and 'sell' in dow_pnl.columns:
-                    dow_pnl['dow_pnl'] = dow_pnl['sell'] - dow_pnl['buy']
-                    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                    dow_pnl = dow_pnl.reindex(day_order)
-                    best_day = dow_pnl['dow_pnl'].idxmax()
+                
+                with col2:
+                    best_day = dow_pnl['dow_pnl'].idxmax()[1]  # Get day name from multi-index
+                    worst_day = dow_pnl['dow_pnl'].idxmin()[1]
                     st.metric("⭐ Best Day", best_day)
+                    st.metric("💔 Worst Day", worst_day)
+                    st.dataframe(dow_pnl[['buy', 'sell', 'dow_pnl']].style.format("{:.2f}"))
             
-            with col2:
-                st.subheader("⏰ Best Execution Hour")
-                if 'hour_pnl' in locals():
+            # Hourly analysis
+            st.markdown("#### 🕒 Hour of Day Analysis")
+            hour_pnl = index_df.groupby(['trade_hour', 'trade_type'])['trade_value'].sum().unstack()
+            
+            if 'buy' in hour_pnl.columns and 'sell' in hour_pnl.columns:
+                hour_pnl['hour_pnl'] = hour_pnl['sell'] - hour_pnl['buy']
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.bar(hour_pnl.reset_index(), 
+                                x='trade_hour', 
+                                y='hour_pnl',
+                                title=f"PnL by Execution Hour",
+                                color='hour_pnl',
+                                color_continuous_scale='RdYlGn')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
                     best_hour = hour_pnl['hour_pnl'].idxmax()
-                    st.metric("⌛ Best Hour", f"{best_hour}:00 - {best_hour+1}:00")
+                    worst_hour = hour_pnl['hour_pnl'].idxmin()
+                    st.metric("⏰ Best Hour", f"{best_hour}:00")
+                    st.metric("👎 Worst Hour", f"{worst_hour}:00")
+                    st.dataframe(hour_pnl[['buy', 'sell', 'hour_pnl']].style.format("{:.2f}"))
             
             # 🎁 Results summary
             total_pnl = pnl_df[pnl_df['trade_type'] == 'sell']['total_value'].sum() - pnl_df[pnl_df['trade_type'] == 'buy']['total_value'].sum()
@@ -215,14 +235,6 @@ if uploaded_file is not None:
                 else:
                     st.info("🔍 Analyze more indices to earn badges!")
             
-            # 📥 Export
-            st.download_button(
-                label="📥 Download Index Report",
-                data=pnl_df.to_csv(index=False),
-                file_name=f"{selected_index}_pnl_report.csv",
-                mime="text/csv"
-            )
-            
             # 🔄 Analyze another suggestion
             if len(all_indices) > 1:
                 st.subheader("🔍 Try Another Index")
@@ -231,9 +243,107 @@ if uploaded_file is not None:
                 if st.button(f"🧐 Analyze {next_index} next"):
                     selected_index = next_index
                     st.experimental_rerun()
+            
+            # =============================================
+            # 🌍 COMPLETE ANALYSIS SECTION (ALL INDICES)
+            # =============================================
+            st.markdown("---")
+            st.header("🌍 Complete Analysis (All Indices)")
+            
+            # Overall stats
+            st.subheader("📊 Overall Performance")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📌 Total Indices Traded", len(df['index_name'].unique()))
+            with col2:
+                st.metric("🔄 Total Trades", len(df))
+            with col3:
+                total_pnl_all = df[df['trade_type'] == 'sell']['trade_value'].sum() - df[df['trade_type'] == 'buy']['trade_value'].sum()
+                st.metric("💰 Net PnL (All)", f"₹{total_pnl_all:,.2f}")
+            
+            # Day of week analysis (all indices) - FIXED IMPLEMENTATION
+            st.subheader("📅 Best Days to Trade (All Indices)")
+            
+            dow_all = df.groupby(['trade_weekday', 'trade_day_name', 'trade_type'])['trade_value'].sum().unstack()
+            if 'buy' in dow_all.columns and 'sell' in dow_all.columns:
+                dow_all['dow_pnl'] = dow_all['sell'] - dow_all['buy']
+                dow_all = dow_all.sort_index(level='trade_weekday')
+                
+                # Get ordered day names
+                day_names_all = dow_all.index.get_level_values('trade_day_name').unique()
+                
+                fig = px.bar(dow_all.reset_index(), 
+                            x='trade_day_name', 
+                            y='dow_pnl',
+                            title="Overall PnL by Day of Week",
+                            color='dow_pnl',
+                            color_continuous_scale='RdYlGn',
+                            category_orders={"trade_day_name": list(day_names_all)})
+                st.plotly_chart(fig, use_container_width=True)
+                
+                best_day_all = dow_all['dow_pnl'].idxmax()[1]
+                worst_day_all = dow_all['dow_pnl'].idxmin()[1]
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("⭐ Overall Best Day", best_day_all)
+                with col2:
+                    st.metric("💔 Overall Worst Day", worst_day_all)
+            
+            # Hourly analysis (all indices)
+            st.subheader("🕒 Best Execution Times (All Indices)")
+            
+            hour_all = df.groupby(['trade_hour', 'trade_type'])['trade_value'].sum().unstack()
+            if 'buy' in hour_all.columns and 'sell' in hour_all.columns:
+                hour_all['hour_pnl'] = hour_all['sell'] - hour_all['buy']
+                
+                fig = px.bar(hour_all.reset_index(), 
+                            x='trade_hour', 
+                            y='hour_pnl',
+                            title="Overall PnL by Execution Hour",
+                            color='hour_pnl',
+                            color_continuous_scale='RdYlGn')
+                st.plotly_chart(fig, use_container_width=True)
+                
+                best_hour_all = hour_all['hour_pnl'].idxmax()
+                worst_hour_all = hour_all['hour_pnl'].idxmin()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("⏰ Overall Best Hour", f"{best_hour_all}:00")
+                with col2:
+                    st.metric("👎 Overall Worst Hour", f"{worst_hour_all}:00")
+            
+            # Index comparison
+            st.subheader("📈 Index Performance Comparison")
+            
+            index_comparison = df.groupby(['index_name', 'trade_type'])['trade_value'].sum().unstack()
+            if 'buy' in index_comparison.columns and 'sell' in index_comparison.columns:
+                index_comparison['pnl'] = index_comparison['sell'] - index_comparison['buy']
+                index_comparison = index_comparison.sort_values('pnl', ascending=False)
+                
+                fig = px.bar(index_comparison.reset_index(), 
+                            x='index_name', 
+                            y='pnl',
+                            title="PnL by Index",
+                            color='pnl',
+                            color_continuous_scale='RdYlGn')
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.dataframe(index_comparison.style.format("{:.2f}"))
+            
+            # 📥 Export complete analysis
+            st.download_button(
+                label="📥 Download Complete Analysis Report",
+                data=index_comparison.to_csv(),
+                file_name="complete_pnl_analysis.csv",
+                mime="text/csv"
+            )
     
     except Exception as e:
         st.error(f"💥 Yikes! Something went wrong: {str(e)}")
+        st.error("Please check your data format and try again.")
 else:
     st.info("👋 Hey there! Upload your trading CSV to get started. Need example data? Check our GitHub!")
     
