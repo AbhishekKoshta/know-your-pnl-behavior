@@ -398,8 +398,11 @@ else:
         st.session_state.first_visit = False
 
 # 📊 Footer
-st.markdown("---")
-col1, col2 = st.columns(2)
+st.markdown("""
+❤️ Pasand aaya? Apne trading friends ko bhi batayein: [Share on WhatsApp](https://wa.me/?text=Check%20this%20cool%20trading%20dashboard%20{https://know-your-pnl-behavior-bttqhrtvdzsse3wsp7spuf.streamlit.app/})
+""")
+st.markdown("""💡 For more details read - https://medium.com/@abhi771991/apni-trading-kundali-dekho-f0ed39377ff2""")
+""")col1, col2 = st.columns(2)
 with col1:
     st.write(f"📊 Total dashboard views: {st.session_state.visit_count * 3}")
 with col2:
