@@ -32,7 +32,7 @@ else:
 
 # 🎪 Main header
 st.title("💰📈 Trading PnL Funhouse 🎢📉")
-st.caption("Comment on my articale for any changes - https://medium.com/@abhi771991/decoding-your-trading-destiny-introducing-your-trading-kundali-6152b6e96ecc")
+st.caption("Comment on my article for any changes - https://medium.com/@abhi771991/decoding-your-trading-destiny-introducing-your-trading-kundali-6152b6e96ecc")
 
 # 👥 Visitor stats
 col1, col2, col3 = st.columns(3)
