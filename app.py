@@ -54,14 +54,13 @@ def check_badges(symbol_count, pnl_value):
         new_badges.append("💰 Big Winner")
     return new_badges
 
-# Add this function after the check_badges function (around line 40-50)
-
-def calculate_holding_times(df):
+# ⏱️ Function to calculate holding times (defined once at the top)
+def calculate_holding_times(trade_df):
     """
     Calculate holding times for completed trades (buy-sell pairs)
     """
     # Make a copy to avoid warnings
-    trades_df = df.copy()
+    trades_df = trade_df.copy()
     
     # Sort by symbol and time
     trades_df = trades_df.sort_values(['symbol', 'order_execution_time'])
@@ -100,110 +99,6 @@ def calculate_holding_times(df):
     
     return pd.DataFrame(holding_times)
 
-# Then add this section after the hourly analysis (around line 250-280 in your code)
-
-# =============================================
-# ⏱️ HOLDING TIME ANALYSIS (New Feature)
-# =============================================
-st.subheader("⏱️ Average Holding Time Analysis")
-
-# Calculate holding times for the selected index
-holding_df = calculate_holding_times(index_df)
-
-if not holding_df.empty:
-    # Calculate average holding times
-    avg_holding_winner = holding_df[holding_df['is_winner']]['holding_minutes'].mean()
-    avg_holding_loser = holding_df[~holding_df['is_winner']]['holding_minutes'].mean()
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("✅ Winning Trades", len(holding_df[holding_df['is_winner']]))
-    with col2:
-        st.metric("❌ Losing Trades", len(holding_df[~holding_df['is_winner']]))
-    with col3:
-        if pd.notna(avg_holding_winner):
-            st.metric("⏱️ Avg Hold Time (Winners)", f"{avg_holding_winner:.1f} min")
-        else:
-            st.metric("⏱️ Avg Hold Time (Winners)", "No data")
-    with col4:
-        if pd.notna(avg_holding_loser):
-            st.metric("⏱️ Avg Hold Time (Losers)", f"{avg_holding_loser:.1f} min")
-        else:
-            st.metric("⏱️ Avg Hold Time (Losers)", "No data")
-    
-    # Visualization
-    if len(holding_df) > 0:
-        fig = px.box(holding_df, 
-                     x='is_winner', 
-                     y='holding_minutes',
-                     title="Holding Time Distribution: Winners vs Losers",
-                     labels={'is_winner': 'Trade Outcome', 'holding_minutes': 'Holding Time (minutes)'},
-                     color='is_winner',
-                     color_discrete_map={True: 'green', False: 'red'})
-        
-        # Add custom x-axis labels
-        fig.update_xaxes(ticktext=["Losers", "Winners"], 
-                        tickvals=[False, True])
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 📊 Detailed holding time table
-        with st.expander("📋 View Detailed Holding Times"):
-            detailed_holdings = holding_df[['symbol', 'buy_time', 'sell_time', 'holding_minutes', 'pnl']].copy()
-            detailed_holdings['holding_minutes'] = detailed_holdings['holding_minutes'].round(1)
-            detailed_holdings['pnl'] = detailed_holdings['pnl'].round(2)
-            detailed_holdings.columns = ['Symbol', 'Buy Time', 'Sell Time', 'Holding (min)', 'PnL']
-            st.dataframe(detailed_holdings.style.format({'PnL': '{:.2f}'})
-                        .applymap(lambda x: 'color: green' if x > 0 else 'color: red', subset=['PnL']))
-        
-        # 🎯 Trading Insight based on holding times
-        st.subheader("🎯 Your Trading Pattern Insight")
-        
-        if pd.notna(avg_holding_winner) and pd.notna(avg_holding_loser):
-            if avg_holding_winner < avg_holding_loser:
-                st.success(f"""
-                ✨ **Interesting Pattern!** You hold your **winning trades** for less time ({avg_holding_winner:.1f} min) 
-                than your **losing trades** ({avg_holding_loser:.1f} min). This is actually GOOD - you're cutting losses 
-                slowly but letting winners run? Actually wait, you're cutting losses slower than winners? Let me rephrase...
-                
-                📊 **Analysis:** You hold losers longer than winners. Consider cutting losses faster!
-                """)
-            elif avg_holding_winner > avg_holding_loser:
-                st.success(f"""
-                ✨ **Great Job!** You hold your **winning trades** longer ({avg_holding_winner:.1f} min) 
-                than your **losing trades** ({avg_holding_loser:.1f} min). This is exactly what successful traders do - 
-                let winners run, cut losers short!
-                
-                🌟 **Keep it up!** This discipline will serve you well.
-                """)
-            else:
-                st.info("Your holding times are similar for winners and losers. Try to let winners run longer!")
-else:
-    st.info("Not enough matched buy-sell pairs to calculate holding times. Make sure you have both buy and sell trades for the same symbols.")
-
-# Add this to the overall analysis section as well (around line 400)
-# After the hourly analysis for all indices
-
-# ⏱️ Overall Holding Time Analysis
-st.subheader("⏱️ Overall Holding Time Analysis (All Indices)")
-
-overall_holding_df = calculate_holding_times(df)
-
-if not overall_holding_df.empty:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        avg_winner_all = overall_holding_df[overall_holding_df['is_winner']]['holding_minutes'].mean()
-        avg_loser_all = overall_holding_df[~overall_holding_df['is_winner']]['holding_minutes'].mean()
-        
-        st.metric("📊 Overall Avg Hold - Winners", f"{avg_winner_all:.1f} min" if pd.notna(avg_winner_all) else "N/A")
-        st.metric("📊 Overall Avg Hold - Losers", f"{avg_loser_all:.1f} min" if pd.notna(avg_loser_all) else "N/A")
-    
-    with col2:
-        # Summary stats
-        winner_pct = (overall_holding_df['is_winner'].sum() / len(overall_holding_df)) * 100
-        st.metric("🎯 Win Rate", f"{winner_pct:.1f}%")
 # 📂 File upload
 st.header("📤 Step 1: Upload Your Trading Data")
 uploaded_file = st.file_uploader("Drag & drop your trading CSV file here 👇", type=["csv"])
@@ -239,7 +134,7 @@ if uploaded_file is not None:
             df['trade_hour'] = df['order_execution_time'].dt.hour
             df['trade_date_only'] = df['order_execution_time'].dt.date
             
-            # Create proper day of week columns (this fixes the error)
+            # Create proper day of week columns
             df['trade_weekday'] = df['order_execution_time'].dt.dayofweek  # Monday=0, Sunday=6
             df['trade_day_name'] = df['order_execution_time'].dt.day_name()  # Full day name
             
@@ -291,11 +186,89 @@ if uploaded_file is not None:
             }))
             
             # =============================================
+            # ⏱️ HOLDING TIME ANALYSIS (NOW IN CORRECT LOCATION)
+            # =============================================
+            st.subheader("⏱️ Average Holding Time Analysis")
+            
+            # Calculate holding times for the selected index
+            holding_df = calculate_holding_times(index_df)
+            
+            if not holding_df.empty:
+                # Calculate average holding times
+                avg_holding_winner = holding_df[holding_df['is_winner']]['holding_minutes'].mean()
+                avg_holding_loser = holding_df[~holding_df['is_winner']]['holding_minutes'].mean()
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("✅ Winning Trades", len(holding_df[holding_df['is_winner']]))
+                with col2:
+                    st.metric("❌ Losing Trades", len(holding_df[~holding_df['is_winner']]))
+                with col3:
+                    if pd.notna(avg_holding_winner):
+                        st.metric("⏱️ Avg Hold Time (Winners)", f"{avg_holding_winner:.1f} min")
+                    else:
+                        st.metric("⏱️ Avg Hold Time (Winners)", "No data")
+                with col4:
+                    if pd.notna(avg_holding_loser):
+                        st.metric("⏱️ Avg Hold Time (Losers)", f"{avg_holding_loser:.1f} min")
+                    else:
+                        st.metric("⏱️ Avg Hold Time (Losers)", "No data")
+                
+                # Visualization
+                if len(holding_df) > 0:
+                    fig = px.box(holding_df, 
+                                 x='is_winner', 
+                                 y='holding_minutes',
+                                 title="Holding Time Distribution: Winners vs Losers",
+                                 labels={'is_winner': 'Trade Outcome', 'holding_minutes': 'Holding Time (minutes)'},
+                                 color='is_winner',
+                                 color_discrete_map={True: 'green', False: 'red'})
+                    
+                    # Add custom x-axis labels
+                    fig.update_xaxes(ticktext=["Losers", "Winners"], 
+                                    tickvals=[False, True])
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 📊 Detailed holding time table
+                    with st.expander("📋 View Detailed Holding Times"):
+                        detailed_holdings = holding_df[['symbol', 'buy_time', 'sell_time', 'holding_minutes', 'pnl']].copy()
+                        detailed_holdings['holding_minutes'] = detailed_holdings['holding_minutes'].round(1)
+                        detailed_holdings['pnl'] = detailed_holdings['pnl'].round(2)
+                        detailed_holdings.columns = ['Symbol', 'Buy Time', 'Sell Time', 'Holding (min)', 'PnL']
+                        st.dataframe(detailed_holdings.style.format({'PnL': '{:.2f}'})
+                                    .applymap(lambda x: 'color: green' if x > 0 else 'color: red', subset=['PnL']))
+                    
+                    # 🎯 Trading Insight based on holding times
+                    st.subheader("🎯 Your Trading Pattern Insight")
+                    
+                    if pd.notna(avg_holding_winner) and pd.notna(avg_holding_loser):
+                        if avg_holding_winner < avg_holding_loser:
+                            st.warning(f"""
+                            ⚠️ **Pattern Alert!** You hold your **losing trades** ({avg_holding_loser:.1f} min) 
+                            longer than your **winning trades** ({avg_holding_winner:.1f} min). 
+                            
+                            💡 **Suggestion:** Try to cut losses faster. Consider stricter stop-losses!
+                            """)
+                        elif avg_holding_winner > avg_holding_loser:
+                            st.success(f"""
+                            ✨ **Excellent!** You hold your **winning trades** longer ({avg_holding_winner:.1f} min) 
+                            than your **losing trades** ({avg_holding_loser:.1f} min). 
+                            
+                            🌟 **Perfect!** This is the trader's ideal - let winners run, cut losers short!
+                            """)
+                        else:
+                            st.info("Your holding times are similar for winners and losers. Try to let winners run longer!")
+            else:
+                st.info("📭 Not enough matched buy-sell pairs to calculate holding times. Make sure you have both buy and sell trades for the same symbols.")
+            
+            # =============================================
             # 🕒 TIME-BASED ANALYSIS (Index Specific)
             # =============================================
             st.subheader("⏰ Time-Based Performance")
             
-            # Day of week analysis - FIXED IMPLEMENTATION
+            # Day of week analysis
             st.markdown("#### 📅 Day of Week Analysis")
             
             # Group by weekday number and day name together
@@ -329,27 +302,35 @@ if uploaded_file is not None:
                     st.metric("💔 Worst Day", worst_day)
                     st.dataframe(dow_pnl[['buy', 'sell', 'dow_pnl']].style.format("{:.2f}"))
 
-                # Add this after the day-wise analysis section (around line 200 in previous code)
-
                 # =========================================
                 # 🔴 Mangal Dosh Warning (Dynamic Alert)
                 # =========================================
-                if 'Mangalvaar' in dow_pnl.index and dow_pnl.loc['Mangalvaar', 'pnl'] < 0:
-                    loss_percent = abs(dow_pnl.loc['Mangalvaar', 'pnl']) / dow_pnl['pnl'].abs().sum() * 100
-                    
-                    st.warning(f"""
-                    🔴 **Mangal Ka Prabhav!**  
-                    Aapke {selected_index} trades mein:  
-                    - Mangalvaar (Tuesday) ko sabse zyada nuksaan hua: **₹{abs(dow_pnl.loc['Mangalvaar', 'pnl']):,.0f}**  
-                    - Ye aapke kul nuksaan ka **{loss_percent:.0f}%** hai  
+                # Fix the Mangal Dosh check
+                day_names_lower = [name.lower() for name in day_names]
+                tuesday_idx = None
+                for i, name in enumerate(day_names):
+                    if 'tuesday' in name.lower() or 'mangal' in name.lower():
+                        tuesday_idx = i
+                        break
+                
+                if tuesday_idx is not None:
+                    tuesday_pnl = dow_pnl.iloc[tuesday_idx]['dow_pnl']
+                    if tuesday_pnl < 0:
+                        loss_percent = abs(tuesday_pnl) / dow_pnl['dow_pnl'].abs().sum() * 100
+                        
+                        st.warning(f"""
+                        🔴 **Mangal Ka Prabhav!**  
+                        Aapke {selected_index} trades mein:  
+                        - Mangalvaar (Tuesday) ko sabse zyada nuksaan hua: **₹{abs(tuesday_pnl):,.0f}**  
+                        - Ye aapke kul nuksaan ka **{loss_percent:.0f}%** hai  
 
-                    💡 *Panditji ka sujhav:*  
-                    "Mangalvaar ko trade avoid karein, ya stop-loss zaroor lagayein!"  
-                    """, icon="⚠️")
-                    
-                    # Add astrological GIF
-                    st.image("https://i.gifer.com/7IAj.gif", width=200, 
-                             caption="Mangal grah aapke trades ko prabhavit kar raha hai")
+                        💡 *Panditji ka sujhav:*  
+                        "Mangalvaar ko trade avoid karein, ya stop-loss zaroor lagayein!"  
+                        """, icon="⚠️")
+                        
+                        # Add astrological GIF
+                        st.image("https://i.gifer.com/7IAj.gif", width=200, 
+                                 caption="Mangal grah aapke trades ko prabhavit kar raha hai")
 
                 # =========================================
                 # 🪐 Grah Anusaar Trading Tips (Planetary Advice)
@@ -435,8 +416,7 @@ if uploaded_file is not None:
                 other_indices = [s for s in all_indices if s != selected_index]
                 next_index = random.choice(other_indices)
                 if st.button(f"🧐 Analyze {next_index} next"):
-                    selected_index = next_index
-                    st.experimental_rerun()
+                    st.rerun()  # Updated from experimental_rerun
             
             # =============================================
             # 🌍 COMPLETE ANALYSIS SECTION (ALL INDICES)
@@ -456,7 +436,30 @@ if uploaded_file is not None:
                 total_pnl_all = df[df['trade_type'] == 'sell']['trade_value'].sum() - df[df['trade_type'] == 'buy']['trade_value'].sum()
                 st.metric("💰 Net PnL (All)", f"₹{total_pnl_all:,.2f}")
             
-            # Day of week analysis (all indices) - FIXED IMPLEMENTATION
+            # Add Overall Holding Time Analysis
+            st.subheader("⏱️ Overall Holding Time Analysis (All Indices)")
+            
+            overall_holding_df = calculate_holding_times(df)
+            
+            if not overall_holding_df.empty:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    avg_winner_all = overall_holding_df[overall_holding_df['is_winner']]['holding_minutes'].mean()
+                    avg_loser_all = overall_holding_df[~overall_holding_df['is_winner']]['holding_minutes'].mean()
+                    
+                    st.metric("📊 Overall Avg Hold - Winners", f"{avg_winner_all:.1f} min" if pd.notna(avg_winner_all) else "N/A")
+                    st.metric("📊 Overall Avg Hold - Losers", f"{avg_loser_all:.1f} min" if pd.notna(avg_loser_all) else "N/A")
+                
+                with col2:
+                    # Summary stats
+                    winner_pct = (overall_holding_df['is_winner'].sum() / len(overall_holding_df)) * 100
+                    st.metric("🎯 Win Rate", f"{winner_pct:.1f}%")
+                    
+                    total_trades_analyzed = len(overall_holding_df)
+                    st.metric("🔄 Matched Trades", total_trades_analyzed)
+            
+            # Day of week analysis (all indices)
             st.subheader("📅 Best Days to Trade (All Indices)")
             
             dow_all = df.groupby(['trade_weekday', 'trade_day_name', 'trade_type'])['trade_value'].sum().unstack()
@@ -528,9 +531,10 @@ if uploaded_file is not None:
                 st.dataframe(index_comparison.style.format("{:.2f}"))
             
             # 📥 Export complete analysis
+            csv_data = index_comparison.to_csv()
             st.download_button(
                 label="📥 Download Complete Analysis Report",
-                data=index_comparison.to_csv(),
+                data=csv_data,
                 file_name="complete_pnl_analysis.csv",
                 mime="text/csv"
             )
@@ -551,7 +555,6 @@ else:
 
 # 📊 Footer
 st.markdown("""
-❤️ Pasand aaya? Apne trading friends ko bhi batayein: [Share on WhatsApp](https://wa.me/?text=Check%20this%20cool%20trading%20dashboard%20{https://know-your-pnl-behavior-bttqhrtvdzsse3wsp7spuf.streamlit.app/})
+❤️ Pasand aaya? Apne trading friends ko bhi batayein: [Share on WhatsApp](https://wa.me/?text=Check%20this%20cool%20trading%20dashboard%20https://know-your-pnl-behavior-bttqhrtvdzsse3wsp7spuf.streamlit.app/)
 """)
 st.markdown("""💡 For more details read - https://medium.com/@abhi771991/apni-trading-kundali-dekho-f0ed39377ff2""")
-
