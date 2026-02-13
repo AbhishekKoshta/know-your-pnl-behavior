@@ -60,9 +60,11 @@ uploaded_file = st.file_uploader("Drag & drop your trading CSV file here 👇", 
 
 if uploaded_file is not None:
     try:
-        # 📊 Read data
-        df = pd.read_csv(uploaded_file)
-        
+        try:
+            # 📊 Read data
+            df = pd.read_csv(uploaded_file)
+        except:
+            df = pd.read_xlsx(uploaded_file)
         with st.expander("🔍 Peek at your raw data (first 5 rows)"):
             st.dataframe(df.head())
         
