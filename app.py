@@ -54,6 +54,156 @@ def check_badges(symbol_count, pnl_value):
         new_badges.append("💰 Big Winner")
     return new_badges
 
+# Add this function after the check_badges function (around line 40-50)
+
+def calculate_holding_times(df):
+    """
+    Calculate holding times for completed trades (buy-sell pairs)
+    """
+    # Make a copy to avoid warnings
+    trades_df = df.copy()
+    
+    # Sort by symbol and time
+    trades_df = trades_df.sort_values(['symbol', 'order_execution_time'])
+    
+    holding_times = []
+    
+    # Group by symbol to match buys with sells
+    for symbol, group in trades_df.groupby('symbol'):
+        buys = group[group['trade_type'] == 'buy'].sort_values('order_execution_time')
+        sells = group[group['trade_type'] == 'sell'].sort_values('order_execution_time')
+        
+        # Match buys with sells (simplified: assumes FIFO matching)
+        for buy_idx, buy in buys.iterrows():
+            # Find first sell after this buy
+            subsequent_sells = sells[sells['order_execution_time'] > buy['order_execution_time']]
+            if not subsequent_sells.empty:
+                sell = subsequent_sells.iloc[0]
+                
+                # Calculate holding time in minutes
+                holding_mins = (sell['order_execution_time'] - buy['order_execution_time']).total_seconds() / 60
+                
+                # Calculate PnL for this trade
+                pnl = (sell['price'] - buy['price']) * min(buy['quantity'], sell['quantity'])
+                
+                holding_times.append({
+                    'symbol': symbol,
+                    'buy_time': buy['order_execution_time'],
+                    'sell_time': sell['order_execution_time'],
+                    'holding_minutes': holding_mins,
+                    'pnl': pnl,
+                    'is_winner': pnl > 0
+                })
+                
+                # Remove the matched sell to avoid reusing
+                sells = sells.drop(sell.name)
+    
+    return pd.DataFrame(holding_times)
+
+# Then add this section after the hourly analysis (around line 250-280 in your code)
+
+# =============================================
+# ⏱️ HOLDING TIME ANALYSIS (New Feature)
+# =============================================
+st.subheader("⏱️ Average Holding Time Analysis")
+
+# Calculate holding times for the selected index
+holding_df = calculate_holding_times(index_df)
+
+if not holding_df.empty:
+    # Calculate average holding times
+    avg_holding_winner = holding_df[holding_df['is_winner']]['holding_minutes'].mean()
+    avg_holding_loser = holding_df[~holding_df['is_winner']]['holding_minutes'].mean()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("✅ Winning Trades", len(holding_df[holding_df['is_winner']]))
+    with col2:
+        st.metric("❌ Losing Trades", len(holding_df[~holding_df['is_winner']]))
+    with col3:
+        if pd.notna(avg_holding_winner):
+            st.metric("⏱️ Avg Hold Time (Winners)", f"{avg_holding_winner:.1f} min")
+        else:
+            st.metric("⏱️ Avg Hold Time (Winners)", "No data")
+    with col4:
+        if pd.notna(avg_holding_loser):
+            st.metric("⏱️ Avg Hold Time (Losers)", f"{avg_holding_loser:.1f} min")
+        else:
+            st.metric("⏱️ Avg Hold Time (Losers)", "No data")
+    
+    # Visualization
+    if len(holding_df) > 0:
+        fig = px.box(holding_df, 
+                     x='is_winner', 
+                     y='holding_minutes',
+                     title="Holding Time Distribution: Winners vs Losers",
+                     labels={'is_winner': 'Trade Outcome', 'holding_minutes': 'Holding Time (minutes)'},
+                     color='is_winner',
+                     color_discrete_map={True: 'green', False: 'red'})
+        
+        # Add custom x-axis labels
+        fig.update_xaxes(ticktext=["Losers", "Winners"], 
+                        tickvals=[False, True])
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 📊 Detailed holding time table
+        with st.expander("📋 View Detailed Holding Times"):
+            detailed_holdings = holding_df[['symbol', 'buy_time', 'sell_time', 'holding_minutes', 'pnl']].copy()
+            detailed_holdings['holding_minutes'] = detailed_holdings['holding_minutes'].round(1)
+            detailed_holdings['pnl'] = detailed_holdings['pnl'].round(2)
+            detailed_holdings.columns = ['Symbol', 'Buy Time', 'Sell Time', 'Holding (min)', 'PnL']
+            st.dataframe(detailed_holdings.style.format({'PnL': '{:.2f}'})
+                        .applymap(lambda x: 'color: green' if x > 0 else 'color: red', subset=['PnL']))
+        
+        # 🎯 Trading Insight based on holding times
+        st.subheader("🎯 Your Trading Pattern Insight")
+        
+        if pd.notna(avg_holding_winner) and pd.notna(avg_holding_loser):
+            if avg_holding_winner < avg_holding_loser:
+                st.success(f"""
+                ✨ **Interesting Pattern!** You hold your **winning trades** for less time ({avg_holding_winner:.1f} min) 
+                than your **losing trades** ({avg_holding_loser:.1f} min). This is actually GOOD - you're cutting losses 
+                slowly but letting winners run? Actually wait, you're cutting losses slower than winners? Let me rephrase...
+                
+                📊 **Analysis:** You hold losers longer than winners. Consider cutting losses faster!
+                """)
+            elif avg_holding_winner > avg_holding_loser:
+                st.success(f"""
+                ✨ **Great Job!** You hold your **winning trades** longer ({avg_holding_winner:.1f} min) 
+                than your **losing trades** ({avg_holding_loser:.1f} min). This is exactly what successful traders do - 
+                let winners run, cut losers short!
+                
+                🌟 **Keep it up!** This discipline will serve you well.
+                """)
+            else:
+                st.info("Your holding times are similar for winners and losers. Try to let winners run longer!")
+else:
+    st.info("Not enough matched buy-sell pairs to calculate holding times. Make sure you have both buy and sell trades for the same symbols.")
+
+# Add this to the overall analysis section as well (around line 400)
+# After the hourly analysis for all indices
+
+# ⏱️ Overall Holding Time Analysis
+st.subheader("⏱️ Overall Holding Time Analysis (All Indices)")
+
+overall_holding_df = calculate_holding_times(df)
+
+if not overall_holding_df.empty:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        avg_winner_all = overall_holding_df[overall_holding_df['is_winner']]['holding_minutes'].mean()
+        avg_loser_all = overall_holding_df[~overall_holding_df['is_winner']]['holding_minutes'].mean()
+        
+        st.metric("📊 Overall Avg Hold - Winners", f"{avg_winner_all:.1f} min" if pd.notna(avg_winner_all) else "N/A")
+        st.metric("📊 Overall Avg Hold - Losers", f"{avg_loser_all:.1f} min" if pd.notna(avg_loser_all) else "N/A")
+    
+    with col2:
+        # Summary stats
+        winner_pct = (overall_holding_df['is_winner'].sum() / len(overall_holding_df)) * 100
+        st.metric("🎯 Win Rate", f"{winner_pct:.1f}%")
 # 📂 File upload
 st.header("📤 Step 1: Upload Your Trading Data")
 uploaded_file = st.file_uploader("Drag & drop your trading CSV file here 👇", type=["csv"])
